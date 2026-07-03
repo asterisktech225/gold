@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"require\\('better-sqlite3'\\)\")",
+      "Bash(npm rebuild *)",
+      "Bash(node -e \"const db = require\\('better-sqlite3'\\)\\('/tmp/test.db'\\); db.exec\\('CREATE TABLE IF NOT EXISTS t \\(id INTEGER PRIMARY KEY\\)'\\); console.log\\('✅ better-sqlite3 works'\\); db.close\\(\\);\")"
+    ]
+  }
+}

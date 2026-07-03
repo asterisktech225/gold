@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+.next/
+
+# env
+.env.local
+.env*.local
+
+# database
+*.db
+*.db-shm
+*.db-wal
+
+# misc
+.DS_Store
+*.tsbuildinfo
