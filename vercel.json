@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "app/api/live/hls/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/series/proxy/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/movies/proxy/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
