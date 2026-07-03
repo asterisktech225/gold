@@ -13,13 +13,12 @@ export default function FavoritesPage() {
   }, []);
 
   async function playFav(f: any) {
-    let endpoint = "";
-    if (f.type === "live")   endpoint = `/api/live/url?streamId=${f.stream_id}`;
-    if (f.type === "movie")  endpoint = `/api/movies/url?streamId=${f.stream_id}`;
-    if (f.type === "series") endpoint = `/api/series/url?streamId=${f.stream_id}`;
-    const r = await fetch(endpoint);
-    const { url } = await r.json();
-    setPlayer({ url, title: f.name, isLive: f.type === "live" });
+    let url = "";
+    let isLive = false;
+    if (f.type === "live")   { url = `/api/live/hls?streamId=${f.stream_id}`; isLive = true; }
+    if (f.type === "movie")  url = `/api/movies/proxy?streamId=${f.stream_id}`;
+    if (f.type === "series") url = `/api/series/proxy?streamId=${f.stream_id}`;
+    setPlayer({ url, title: f.name, isLive });
   }
 
   const grouped = { live: favs.filter(f => f.type === "live"), movie: favs.filter(f => f.type === "movie"), series: favs.filter(f => f.type === "series") };

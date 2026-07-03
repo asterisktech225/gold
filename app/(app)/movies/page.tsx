@@ -27,8 +27,7 @@ export default function MoviesPage() {
 
   async function playMovie(m: any) {
     const ext = m.container_extension ?? "mp4";
-    const r = await fetch(`/api/movies/url?streamId=${m.stream_id}&ext=${ext}`);
-    const { url } = await r.json();
+    const url = `/api/movies/proxy?streamId=${m.stream_id}&ext=${ext}`;
     setPlayer({ url, title: m.name });
   }
 

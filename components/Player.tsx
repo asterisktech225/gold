@@ -83,13 +83,6 @@ export default function Player({ url, title, isLive, onClose }: Props) {
 
     const streamId = extractStreamId(url);
 
-    let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
-    if (streamId) {
-      heartbeatTimer = setInterval(() => {
-        fetch(`/api/live/hls?heartbeat=${streamId}`).catch(() => {});
-      }, 10_000);
-    }
-
     const isM3U8 = url.includes(".m3u8") || url.includes("/hls") || isLive;
 
     if (isM3U8) {
@@ -128,9 +121,7 @@ export default function Player({ url, title, isLive, onClose }: Props) {
 
       return () => {
         destroyed = true;
-        if (heartbeatTimer) clearInterval(heartbeatTimer);
         hlsInstance?.destroy();
-        if (streamId) fetch(`/api/live/hls?stop=${streamId}`).catch(() => {});
       };
     } else {
       video.src = url;
@@ -142,8 +133,7 @@ export default function Player({ url, title, isLive, onClose }: Props) {
       };
 
       return () => {
-        if (heartbeatTimer) clearInterval(heartbeatTimer);
-        if (streamId) fetch(`/api/live/hls?stop=${streamId}`).catch(() => {});
+        // cleanup
       };
     }
   }, [url, isLive, retryKey]);

@@ -40,8 +40,7 @@ export default function SeriesPage() {
 
   async function playEpisode(ep: any) {
     const ext = ep.container_extension ?? "mp4";
-    const r = await fetch(`/api/series/url?streamId=${ep.id}&ext=${ext}`);
-    const { url } = await r.json();
+    const url = `/api/series/proxy?streamId=${ep.id}&ext=${ext}`;
     setPlayer({ url, title: ep.title ?? ep.id });
   }
 
