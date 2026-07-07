@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ProxyAgent } from "undici";
 import { requireCreds } from "@/lib/api-helpers";
 import { iptv } from "@/lib/iptv";
 
 const IPTV_UA = "Lavf/60.16.100";
+
+// Proxy sortant optionnel (ex: tunnel vers une IP residentielle) pour contourner
+// le blocage anti-restream des segments sur l'IP du serveur.
+const IPTV_PROXY_URL = process.env.IPTV_PROXY_URL;
+const proxyDispatcher = IPTV_PROXY_URL ? new ProxyAgent(IPTV_PROXY_URL) : undefined;
 
 function resolveUrl(url: string, base: string): string {
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -65,7 +71,7 @@ async function proxyFetch(url: string, sessionCookies: string): Promise<NextResp
 
   let upstream: Response;
   try {
-    upstream = await fetch(url, { headers: reqHeaders, cache: "no-store", redirect: "follow" });
+    upstream = await fetch(url, { headers: reqHeaders, cache: "no-store", redirect: "follow", dispatcher: proxyDispatcher } as any);
   } catch (err) {
     console.error("[HLS proxy] fetch error:", err);
     return NextResponse.json({ error: "Serveur IPTV inaccessible" }, { status: 502 });
