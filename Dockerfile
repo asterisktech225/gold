@@ -30,6 +30,11 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Bindings natifs de libsql chargés dynamiquement (requireNative) → non tracés par
+# le build standalone. On les copie explicitement depuis le builder.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/libsql ./node_modules/libsql
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@libsql ./node_modules/@libsql
+
 # Dossier de données inscriptible par l'utilisateur non-root
 RUN mkdir -p /data && chown nextjs:nodejs /data
 VOLUME /data
