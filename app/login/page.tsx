@@ -18,7 +18,7 @@ export default function LoginPage() {
       body: JSON.stringify(form),
     });
     setLoading(false);
-    if (res.ok) { router.push("/live"); router.refresh(); }
+    if (res.ok) { router.push("/home"); router.refresh(); }
     else { const d = await res.json(); setError(d.error ?? "Erreur inconnue"); }
   }
 
@@ -29,7 +29,7 @@ export default function LoginPage() {
           <div className="w-14 h-14 bg-accent rounded-2xl flex items-center justify-center mb-4">
             <Tv size={28} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold">IPTV Player</h1>
+          <h1 className="text-2xl font-bold">Gold TV</h1>
           <p className="text-white/50 text-sm mt-1">Connectez-vous à votre service</p>
         </div>
 

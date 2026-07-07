@@ -15,7 +15,10 @@ export default function LivePage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    fetch("/api/live/categories").then(r => r.json()).then(setCategories);
+    fetch("/api/live/categories")
+      .then(r => r.json())
+      .then(data => setCategories(Array.isArray(data) ? data : []))
+      .catch(() => setCategories([]));
   }, []);
 
   useEffect(() => {
@@ -23,14 +26,25 @@ export default function LivePage() {
     setLoadingCat(true);
     fetch(`/api/live/streams?categoryId=${catId}`)
       .then(r => r.json())
-      .then(data => { setChannels(data); setLoadingCat(false); });
+      .then(data => { setChannels(Array.isArray(data) ? data : []); setLoadingCat(false); })
+      .catch(() => { setChannels([]); setLoadingCat(false); });
   }, [catId]);
 
   async function playChannel(ch: any) {
     setActive(ch);
-    const r = await fetch(`/api/live/url?streamId=${ch.stream_id}`);
-    const { url } = await r.json();
+    let url: string | undefined;
+    try {
+      const r = await fetch(`/api/live/url?streamId=${ch.stream_id}`);
+      ({ url } = await r.json());
+    } catch { return; }
+    if (!url) return;
     setStreamUrl(url);
+    // Historique "reprendre"
+    fetch("/api/history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "live", streamId: ch.stream_id, name: ch.name, cover: ch.stream_icon }),
+    }).catch(() => {});
     // Charge l'EPG en arrière-plan
     fetch(`/api/epg?streamId=${ch.stream_id}`)
       .then(r => r.json())

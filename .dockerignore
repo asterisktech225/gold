@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+npm-debug.log
+Dockerfile
+.dockerignore
+*.db
+*.db-shm
+*.db-wal
+.env*.local
+README.md

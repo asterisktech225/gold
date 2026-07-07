@@ -11,7 +11,13 @@ export async function GET(req: NextRequest) {
   const q = (req.nextUrl.searchParams.get("q") ?? "").toLowerCase().trim();
   if (!q) return NextResponse.json([]);
 
-  const cats: any[] = await iptv.seriesCategories(r.creds);
+  let cats: any[];
+  try {
+    cats = await iptv.seriesCategories(r.creds);
+    if (!Array.isArray(cats)) throw new Error("bad response");
+  } catch {
+    return NextResponse.json({ error: "Serveur IPTV inaccessible" }, { status: 502 });
+  }
   const results: any[] = [];
 
   for (let i = 0; i < cats.length; i += CONCURRENCY) {

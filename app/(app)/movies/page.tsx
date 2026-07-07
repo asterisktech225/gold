@@ -16,7 +16,10 @@ export default function MoviesPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    fetch("/api/movies/categories").then(r => r.json()).then(setCategories);
+    fetch("/api/movies/categories")
+      .then(r => r.json())
+      .then(data => setCategories(Array.isArray(data) ? data : []))
+      .catch(() => setCategories([]));
   }, []);
 
   useEffect(() => {
@@ -25,7 +28,8 @@ export default function MoviesPage() {
     setGlobalResults(null);
     fetch(`/api/movies/streams?categoryId=${catId}`)
       .then(r => r.json())
-      .then(data => { setMovies(data); setLoading(false); });
+      .then(data => { setMovies(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => { setMovies([]); setLoading(false); });
   }, [catId]);
 
   // Recherche globale quand pas de categorie selectionnee
@@ -38,7 +42,7 @@ export default function MoviesPage() {
     debounceRef.current = setTimeout(() => {
       fetch(`/api/movies/search?q=${encodeURIComponent(search)}`)
         .then(r => r.json())
-        .then(data => { setGlobalResults(data); setSearching(false); })
+        .then(data => { setGlobalResults(Array.isArray(data) ? data : []); setSearching(false); })
         .catch(() => setSearching(false));
     }, 400);
   }, [search, catId]);
@@ -47,6 +51,12 @@ export default function MoviesPage() {
     const ext = m.container_extension ?? "mp4";
     const url = `/api/movies/proxy?streamId=${m.stream_id}&ext=${ext}`;
     setPlayer({ url, title: m.name });
+    // Historique "reprendre"
+    fetch("/api/history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "movie", streamId: m.stream_id, name: m.name, cover: m.stream_icon, data: { ext } }),
+    }).catch(() => {});
   }
 
   // Films a afficher : soit filtre local (categorie), soit recherche globale

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "IPTV Player",
+  title: "Gold TV",
   description: "Lecteur IPTV Xtream Codes",
 };
 

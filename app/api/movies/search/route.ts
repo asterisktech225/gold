@@ -12,7 +12,13 @@ export async function GET(req: NextRequest) {
   if (!q) return NextResponse.json([]);
 
   // Recupere toutes les categories
-  const cats: any[] = await iptv.vodCategories(r.creds);
+  let cats: any[];
+  try {
+    cats = await iptv.vodCategories(r.creds);
+    if (!Array.isArray(cats)) throw new Error("bad response");
+  } catch {
+    return NextResponse.json({ error: "Serveur IPTV inaccessible" }, { status: 502 });
+  }
 
   // Cherche dans toutes les categories en parallele (par batch)
   const results: any[] = [];

@@ -19,7 +19,18 @@ interface Props {
   title?: string;
   isLive?: boolean;
   onClose?: () => void;
+  onNext?: () => void;
+  nextTitle?: string;
+  /** Début du générique de fin (secondes) si connu via chapitrage — sinon heuristique NEXT_TRIGGER. */
+  creditsStart?: number | null;
 }
+
+// Déclenche l'overlay "épisode suivant" quand il reste moins de NEXT_TRIGGER secondes,
+// puis lance l'épisode suivant après NEXT_DELAY secondes de lecture.
+const NEXT_TRIGGER = 45;
+const NEXT_DELAY = 10;
+
+const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
 function errorLabel(code?: number, type?: string): string {
   if (code === 509) return "Limite de connexions atteinte (509) — vérifiez votre abonnement IPTV.";
@@ -59,7 +70,7 @@ const btnStyle: React.CSSProperties = {
   justifyContent: "center",
 };
 
-export default function Player({ url, title, isLive, onClose }: Props) {
+export default function Player({ url, title, isLive, onClose, onNext, nextTitle, creditsStart }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [muted, setMuted] = useState(false);
@@ -71,6 +82,32 @@ export default function Player({ url, title, isLive, onClose }: Props) {
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [showControls, setShowControls] = useState(true);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const [rate, setRate] = useState(1);
+  const [rateMenuOpen, setRateMenuOpen] = useState(false);
+  const rateMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!rateMenuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (!rateMenuRef.current?.contains(e.target as Node)) setRateMenuOpen(false);
+    };
+    window.addEventListener("click", onClick);
+    return () => window.removeEventListener("click", onClick);
+  }, [rateMenuOpen]);
+  const [nextCountdown, setNextCountdown] = useState<number | null>(null);
+  const [nextCancelled, setNextCancelled] = useState(false);
+  const nextTriggerTimeRef = useRef<number | null>(null);
+  const nextFiredRef = useRef(false);
+  const onNextRef = useRef(onNext);
+  onNextRef.current = onNext;
+
+  function fireNext() {
+    if (nextFiredRef.current || !onNextRef.current) return;
+    nextFiredRef.current = true;
+    onNextRef.current();
+  }
 
   useEffect(() => {
     if (!videoRef.current || !url) return;
@@ -80,6 +117,10 @@ export default function Player({ url, title, isLive, onClose }: Props) {
     setPlaying(false);
     setCurrentTime(0);
     setDuration(0);
+    setNextCountdown(null);
+    setNextCancelled(false);
+    nextTriggerTimeRef.current = null;
+    nextFiredRef.current = false;
 
     const streamId = extractStreamId(url);
 
@@ -146,8 +187,11 @@ export default function Player({ url, title, isLive, onClose }: Props) {
     const onTimeUpdate = () => setCurrentTime(video.currentTime);
     const onDurationChange = () => setDuration(video.duration || 0);
     const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onEnded = () => setPlaying(false);
+    const onPause = () => { setPlaying(false); setShowControls(true); };
+    const onEnded = () => {
+      setPlaying(false);
+      fireNext();
+    };
 
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("durationchange", onDurationChange);
@@ -164,12 +208,46 @@ export default function Player({ url, title, isLive, onClose }: Props) {
     };
   }, []);
 
+  // Auto-next : compte à rebours au début du générique de fin.
+  // Si creditsStart est connu (chapitrage ffprobe), on l'utilise ; sinon heuristique NEXT_TRIGGER.
+  useEffect(() => {
+    if (!onNext || isLive || nextCancelled || nextFiredRef.current) return;
+    if (!duration) return;
+
+    const hasMarker = creditsStart != null && creditsStart > 30 && creditsStart < duration - 5;
+    if (!hasMarker && duration < NEXT_TRIGGER * 2) return;
+    const triggerAt = hasMarker ? creditsStart! : duration - NEXT_TRIGGER;
+
+    const remaining = duration - currentTime;
+    if (currentTime < triggerAt) {
+      // L'utilisateur est revenu en arrière : on réarme l'overlay
+      if (nextTriggerTimeRef.current !== null) {
+        nextTriggerTimeRef.current = null;
+        setNextCountdown(null);
+      }
+      return;
+    }
+
+    if (nextTriggerTimeRef.current === null) {
+      nextTriggerTimeRef.current = currentTime;
+    }
+    const elapsed = currentTime - nextTriggerTimeRef.current;
+    const left = Math.ceil(Math.min(NEXT_DELAY, remaining) - elapsed);
+    if (left <= 0) {
+      setNextCountdown(null);
+      fireNext();
+    } else {
+      setNextCountdown(left);
+    }
+  }, [currentTime, duration, onNext, isLive, nextCancelled, creditsStart]);
+
   // Keyboard controls
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const video = videoRef.current;
       if (!video) return;
       if ((e.target as HTMLElement)?.tagName === "INPUT") return;
+      if (document.fullscreenElement) pokeControls();
 
       switch (e.key) {
         case " ":
@@ -218,6 +296,25 @@ export default function Player({ url, title, isLive, onClose }: Props) {
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
+
+  // En plein écran : masque les contrôles après 3s sans mouvement de souris (sauf en pause)
+  function pokeControls() {
+    setShowControls(true);
+    clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => {
+      if (videoRef.current && !videoRef.current.paused) setShowControls(false);
+    }, 3000);
+  }
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      clearTimeout(hideTimerRef.current);
+      setShowControls(true);
+      return;
+    }
+    pokeControls();
+    return () => clearTimeout(hideTimerRef.current);
+  }, [isFullscreen]);
 
   function togglePlay() {
     const video = videoRef.current;
@@ -270,12 +367,45 @@ export default function Player({ url, title, isLive, onClose }: Props) {
     setMuted(!muted);
   }
 
+  function changeRate(r: number) {
+    const video = videoRef.current;
+    setRate(r);
+    setRateMenuOpen(false);
+    if (video) {
+      video.playbackRate = r;
+      // Conservé au changement de source (épisode suivant, retry…)
+      video.defaultPlaybackRate = r;
+    }
+  }
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  // En inline : largeur bornée pour que la vidéo 16/9 ne dépasse pas ~60% de la hauteur d'écran.
+  // En plein écran : le wrapper remplit l'écran et la vidéo prend tout l'espace au-dessus des contrôles.
+  const wrapperStyle: React.CSSProperties = isFullscreen
+    ? { position: "relative", width: "100%", height: "100%", background: "#000", cursor: showControls ? "default" : "none" }
+    : { borderRadius: 16, overflow: "hidden", background: "#000", maxWidth: "min(100%, calc(60vh * 16 / 9))", margin: "0 auto" };
+
+  const videoBoxStyle: React.CSSProperties = isFullscreen
+    ? { position: "relative", height: "100%", background: "#000" }
+    : { position: "relative", aspectRatio: "16/9", background: "#000" };
+
+  // En plein écran les contrôles passent en overlay auto-masqué en bas de l'écran
+  const controlsStyle: React.CSSProperties = isFullscreen
+    ? {
+        position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 7,
+        background: "linear-gradient(transparent, rgba(0,0,0,0.85))",
+        padding: "20px 16px 10px",
+        opacity: showControls ? 1 : 0,
+        pointerEvents: showControls ? "auto" : "none",
+        transition: "opacity 0.25s",
+      }
+    : { background: "#111", padding: "6px 12px 8px" };
+
   return (
-    <div ref={wrapperRef} style={{ borderRadius: 16, overflow: "hidden", background: "#000" }}>
+    <div ref={wrapperRef} style={wrapperStyle} onMouseMove={isFullscreen ? pokeControls : undefined}>
       {/* Video container */}
-      <div style={{ position: "relative", aspectRatio: "16/9", background: "#000" }}>
+      <div style={videoBoxStyle}>
         {/* Loading spinner */}
         {loading && !error && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", zIndex: 5 }}>
@@ -304,13 +434,41 @@ export default function Player({ url, title, isLive, onClose }: Props) {
           muted={muted}
           onWaiting={() => setLoading(true)}
           onPlaying={() => setLoading(false)}
+          onDoubleClick={toggleFullscreen}
         />
+
+        {/* Overlay épisode suivant */}
+        {nextCountdown !== null && !error && (
+          <div style={{ position: "absolute", right: 16, bottom: 16, zIndex: 6, background: "rgba(17,17,17,0.92)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: "12px 16px", maxWidth: 280 }}>
+            <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 11, marginBottom: 2 }}>
+              Épisode suivant dans {nextCountdown}s
+            </p>
+            {nextTitle && (
+              <p style={{ color: "white", fontSize: 13, fontWeight: 600, marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nextTitle}</p>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => { setNextCountdown(null); fireNext(); }}
+                style={{ flex: 1, background: "#6c63ff", color: "white", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              >
+                Lire maintenant
+              </button>
+              <button
+                onClick={() => { setNextCancelled(true); setNextCountdown(null); }}
+                style={{ background: "none", color: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Big play button when paused */}
         {!playing && !loading && !error && (
           <div
             style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3, cursor: "pointer" }}
             onClick={togglePlay}
+            onDoubleClick={toggleFullscreen}
           >
             <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Play size={32} color="white" fill="white" />
@@ -319,14 +477,8 @@ export default function Player({ url, title, isLive, onClose }: Props) {
         )}
       </div>
 
-      {/* Controls — in normal flow below the video, not overlapping */}
-      <div
-        data-controls
-        style={{
-          background: "#111",
-          padding: "6px 12px 8px",
-        }}
-      >
+      {/* Controls — sous la vidéo en inline, overlay auto-masqué en plein écran */}
+      <div data-controls style={controlsStyle}>
         {/* Progress bar (VOD only) */}
         {!isLive && duration > 0 && (
           <div style={{ marginBottom: 4 }}>
@@ -380,6 +532,36 @@ export default function Player({ url, title, isLive, onClose }: Props) {
             onChange={changeVolume}
             style={{ width: 56, height: 4, cursor: "pointer", accentColor: "#6c63ff" }}
           />
+
+          {/* Vitesse de lecture */}
+          {!isLive && (
+            <div ref={rateMenuRef} style={{ position: "relative" }}>
+              <button
+                onClick={() => setRateMenuOpen(o => !o)}
+                style={{ ...btnStyle, fontSize: 12, fontWeight: 600, color: rate !== 1 ? "#6c63ff" : "rgba(255,255,255,0.7)", minWidth: 38 }}
+                title="Vitesse de lecture"
+              >
+                {rate.toLocaleString("fr-FR")}x
+              </button>
+              {rateMenuOpen && (
+                <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", background: "rgba(17,17,17,0.95)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: 4, zIndex: 20, minWidth: 72 }}>
+                  {RATES.map(r => (
+                    <button
+                      key={r}
+                      onClick={() => changeRate(r)}
+                      style={{
+                        display: "block", width: "100%", textAlign: "center", background: r === rate ? "#6c63ff" : "none",
+                        color: "white", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12,
+                        fontWeight: r === rate ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap",
+                      }}
+                    >
+                      {r.toLocaleString("fr-FR")}x
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Title */}
           {title && <span style={{ flex: 1, fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "white", padding: "0 8px", minWidth: 0 }}>{title}</span>}

@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Tv, Film, Clapperboard, Heart, LogOut, Settings } from "lucide-react";
+import { Tv, Film, Clapperboard, Heart, LogOut, Settings, Home } from "lucide-react";
 import { clsx } from "clsx";
 
 const NAV = [
+  { href: "/home",      label: "Accueil",  icon: Home },
   { href: "/live",      label: "Live TV",  icon: Tv },
   { href: "/movies",    label: "Films",    icon: Film },
   { href: "/series",    label: "Séries",   icon: Clapperboard },
@@ -25,7 +26,7 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 inset-x-0 z-50 h-16 bg-surface border-b border-white/10 flex items-center px-6 gap-8">
-      <span className="text-accent font-bold text-xl tracking-tight mr-4">▶ IPTV</span>
+      <span className="text-accent font-bold text-xl tracking-tight mr-4">▶ Gold TV</span>
       <div className="flex gap-1 flex-1">
         {NAV.map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href}

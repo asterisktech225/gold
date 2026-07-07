@@ -13,3 +13,12 @@ export async function requireCreds(): Promise<{ creds: Creds } | NextResponse> {
 
   return { creds: session };
 }
+
+/** Exécute un appel IPTV et renvoie toujours du JSON, même si le serveur IPTV est down. */
+export async function iptvJson(fn: () => Promise<any>): Promise<NextResponse> {
+  try {
+    return NextResponse.json(await fn());
+  } catch {
+    return NextResponse.json({ error: "Serveur IPTV inaccessible" }, { status: 502 });
+  }
+}
